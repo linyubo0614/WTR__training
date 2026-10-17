@@ -1,0 +1,11 @@
+[PASS] Default separation off: first I | actual=8 expected=8
+[PASS] Separation: large error freezes I | actual=0 expected=0
+[PASS] Separation: boundary error accumulates | actual=3 expected=3
+[PASS] Separation: inside range accumulates | actual=5 expected=5
+[PASS] Separation: large error again freezes old I | actual=5 expected=5
+[PASS] Separation: reverse error inside range decreases I | actual=3 expected=3
+[PASS] Disable separation: accumulate and clamp | actual=10 expected=10
+[PASS] Reset keeps separation enabled: large error freezes | actual=0 expected=0
+[PASS] Reset keeps threshold: boundary accumulates | actual=3 expected=3
+
+Bonus result: 9/9 checks passed.

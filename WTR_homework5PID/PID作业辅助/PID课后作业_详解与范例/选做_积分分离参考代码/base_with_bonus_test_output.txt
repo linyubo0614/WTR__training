@@ -1,0 +1,26 @@
+[PASS] P positive error | actual=4 expected=4
+[PASS] P negative error | actual=-4 expected=-4
+[PASS] P zero error | actual=0 expected=0
+[PASS] PID first call | actual=4.2 expected=4.2
+[PASS] PID second call | actual=1.3 expected=1.3
+[PASS] PID after reset | actual=4.2 expected=4.2
+[PASS] I first increment | actual=0.5 expected=0.5
+[PASS] I reaches limit | actual=1 expected=1
+[PASS] I stays limited | actual=1 expected=1
+[PASS] I keeps history at zero error | actual=1 expected=1
+[PASS] I decreases on reverse error | actual=0.8 expected=0.8
+[PASS] D first call is zero | actual=0 expected=0
+[PASS] D rising feedback | actual=-1 expected=-1
+[PASS] D target-only step | actual=0 expected=0
+[PASS] D falling feedback | actual=1 expected=1
+[PASS] Output upper limit | actual=5 expected=5
+[PASS] Output lower limit | actual=-5 expected=-5
+[PASS] Output returns to zero | actual=0 expected=0
+[PASS] I with dt=0.1 for 1 second | actual=2 expected=2
+[PASS] I with dt=0.2 for 1 second | actual=2 expected=2
+[PASS] Object A first call | actual=1 expected=1
+[PASS] Object B first call | actual=4 expected=4
+[PASS] Object A keeps own history | actual=2 expected=2
+[PASS] Object B keeps own history | actual=4 expected=4
+
+Result: 24/24 checks passed.

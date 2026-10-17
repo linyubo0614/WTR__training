@@ -1,0 +1,41 @@
+终端中编译与测试结果
+
+PS C:\Users\32871\Desktop\PID课后作业\PID类课后作业> & "D:\mingw64\mingw64\bin\g++.exe" -std=c++11 -Wall -Wextra -Wpedantic pid.cpp main.cpp -o pid_test.exe
+PS C:\Users\32871\Desktop\PID课后作业\PID类课后作业> .\pid_test.exe
+[PASS] P positive error | actual=4 expected=4
+[PASS] P negative error | actual=-4 expected=-4
+[PASS] P zero error | actual=0 expected=0
+[PASS] PID first call | actual=4.2 expected=4.2
+[PASS] PID second call | actual=1.3 expected=1.3
+[PASS] PID after reset | actual=4.2 expected=4.2
+[PASS] I first increment | actual=0.5 expected=0.5
+[PASS] I reaches limit | actual=1 expected=1
+[PASS] I stays limited | actual=1 expected=1
+[PASS] I keeps history at zero error | actual=1 expected=1
+[PASS] I decreases on reverse error | actual=0.8 expected=0.8
+[PASS] D first call is zero | actual=0 expected=0
+[PASS] D rising feedback | actual=-1 expected=-1
+[PASS] D target-only step | actual=0 expected=0
+[PASS] D falling feedback | actual=1 expected=1
+[PASS] Output upper limit | actual=5 expected=5
+[PASS] Output lower limit | actual=-5 expected=-5
+[PASS] Output returns to zero | actual=0 expected=0
+[PASS] I with dt=0.1 for 1 second | actual=2 expected=2
+[PASS] I with dt=0.2 for 1 second | actual=2 expected=2
+[PASS] Object A first call | actual=1 expected=1
+[PASS] Object B first call | actual=4 expected=4
+[PASS] Object A keeps own history | actual=2 expected=2
+[PASS] Object B keeps own history | actual=4 expected=4
+
+Result: 24/24 checks passed.
+
+[PASS] IS large error is frozen | actual=0 expected=0
+[PASS] IS threshold boundary integrates | actual=3 expected=3
+[PASS] IS small error integrates | actual=5 expected=5
+[PASS] IS large error keeps old I | actual=5 expected=5
+[PASS] IS reverse error integrates | actual=3 expected=3
+[PASS] IS disabled resumes integration | actual=10 expected=10
+[PASS] IS reset keeps separation enabled | actual=0 expected=0
+[PASS] IS reset still accepts threshold | actual=3 expected=3
+Optional result: 8/8 checks passed.
+Total result: 32/32 checks passed.
