@@ -10,7 +10,7 @@ extern "C" void TaskC(void *argument);
 
 // 延时us数
 //100，240，300，350，500
-constexpr uint32_t WRITE_WAIT_US = 300U;
+constexpr uint32_t WRITE_WAIT_US = 10000U;
 
 static void BusyWaitBeforeWrite(uint32_t wait_us) {
   const uint32_t cycles_per_us = osKernelGetSysTimerFreq() / 1000000U;
@@ -22,7 +22,7 @@ static void BusyWaitBeforeWrite(uint32_t wait_us) {
   }
 }
 
-constexpr uint32_t BUFFER_SIZE = 2000;
+constexpr uint32_t BUFFER_SIZE = 100U;
 volatile uint8_t shared_buffer[BUFFER_SIZE];
 osEventFlagsId_t event_flags;
 osThreadAttr_t thread_attr_A = {
@@ -78,6 +78,6 @@ extern "C" void TaskB(void *argument) {
 
 extern "C" void TaskC(void *argument) {
   osEventFlagsWait(event_flags, 0x0003, osFlagsWaitAll, osWaitForever);
-  HAL_UART_Transmit(&huart1, (uint8_t *)shared_buffer, BUFFER_SIZE, 100);
+  HAL_UART_Transmit(&huart1, (uint8_t *)shared_buffer, BUFFER_SIZE, 1000);
   osThreadExit();
 }
