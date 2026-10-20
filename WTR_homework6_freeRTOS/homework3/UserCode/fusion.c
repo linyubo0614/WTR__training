@@ -22,7 +22,7 @@ FusionResult Fusion_Calculate(
     }
 
     /* 时间差在允许范围内，计算平均值 */
-    //融合后设置为第三种类型的数据
+    /* 融合后设置为第三种类型的数据 */
     output->type = 3;
     output->value =(sensor1->value + sensor2->value) / 2.0f;
 

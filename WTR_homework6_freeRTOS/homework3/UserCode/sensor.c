@@ -25,7 +25,7 @@ static void Sensor1_Callback(void *argument)
     sample.value = (float)(rand() % 10001) / 100.0f;
     sample.time_ms = HAL_GetTick();
 
-    /* 2. 将三个字段放进9字节数据包 */
+    /* 将三个字段放进9字节数据包 */
     SensorPacket packet;
 
     /* 传感器编号占1字节，测量值占4字节，时间戳占4字节 */
@@ -41,7 +41,7 @@ static void Sensor1_Callback(void *argument)
         &sample.time_ms,
         sizeof(sample.time_ms));
 
-    /* 3. 放入传感器1队列 */
+    /* 放入传感器1队列 */
     osMessageQueuePut(
         Sensor01Handle, // 队列句柄
         packet,
@@ -82,7 +82,7 @@ static void Sensor2_Callback(void *argument)
         0);
 }
 
-/*启动传感器*/
+/* 启动传感器 */
 /* 创建并启动两路传感器的软件定时器 */
 void Sensor_Start(void)
 {

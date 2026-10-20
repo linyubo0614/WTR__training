@@ -23,24 +23,24 @@ typedef enum
     OUTPUT_FUSED =1   /* 输出融合数据 */
 } OutputMode;
 
-//默认状态设置为原始态
+/* 默认状态设置为原始态 */
 volatile OutputMode output_mode = OUTPUT_RAW;
 
-//flag判断是否收到切换状态的请求（也就是按键）
+/* flag判断是否收到切换状态的请求（也就是按键） */
 #define PROCESS_SWITCH_FLAG  1
 
 extern osThreadId_t processTaskHandle;
 
-//申请切换模式函数，供按键任务调用
+/* 申请切换模式函数，供按键任务调用 */
 void Process_RequestModeSwitch(void)
 {
     //将flag置1
     osThreadFlagsSet(processTaskHandle, PROCESS_SWITCH_FLAG);
 }
 
-/*从指定队列读取一条数据,成功返回1.没有数据或读取失败返回0*/
+/* 从指定队列读取一条数据,成功返回1.没有数据或读取失败返回 0*/
 
- //从队列queue中获取信息，转化成结构体存到指定位置sample
+/* 从队列queue中获取信息，转化成结构体存到指定位置sample */
 static uint8_t ReadSample(osMessageQueueId_t queue,SensorData *sample)
 {
 
