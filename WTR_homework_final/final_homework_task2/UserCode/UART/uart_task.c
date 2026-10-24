@@ -1,13 +1,22 @@
+/**
+ * 用于上位机和下位机沟通 */
+
 #include "uart_task.h"
 #include "UARTCommunication.h"
 #include "usart.h"
 #include "led.h"
 #include "cmsis_os2.h"
+#include "motor_task.h"
+#include "CANCommunication.h"
 
-// 第0位：接收完成
+volatile bool host_connected = false;
+volatile uint32_t host_time = 0;
+volatile bool host_stop = false;
+
+// 接收完成
 #define UART_RX_DONE 1
 
-// 第1位：串口发生错误
+// 串口发生错误
 #define UART_RX_ERROR 2
 
 // 串口任务句柄
@@ -20,13 +29,11 @@ static uint8_t rx_buffer[32];
 static volatile uint16_t rx_length = 0;
 
 // 启动一次DMA接收，开始接收（来自上位机的数据）
+// 并且将数据存入rx_buffer
 static bool StartReceive(void)
 {
-    HAL_StatusTypeDef result =
-        HAL_UARTEx_ReceiveToIdle_DMA(
-            &huart1,
-            rx_buffer,
-            sizeof(rx_buffer));
+    // 开启DMA
+    HAL_StatusTypeDef result = HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rx_buffer, sizeof(rx_buffer));
 
     if (result != HAL_OK)
     {
@@ -47,109 +54,125 @@ void UartTask(void *argument)
 
     uart_handle = osThreadGetId();
 
-    // 最近一次解析成功的命令
+    // 初始化命令
     Command command = {0};
 
-    // 上位机连接状态
-    bool connected = false;
+    // 上次发送时间
+    uint32_t last_send = HAL_GetTick();
 
-    // 最近一次收到有效命令的时刻
-    uint32_t last_receive = 0;
-
-    // 上次发送反馈的时刻
-    uint32_t last_send = osKernelGetTickCount();
-
-    // 尚未取得电机反馈时的初始状态
-    uint8_t state = 0xFF;
-    int16_t speed = 0;
-    int16_t position = 0;
-
+    // 清空接收的字节数
     UART_Reset();
 
-    // 启动第一次接收
-    // receiving用于保存接收状态
+    // 开启接收数据，把开启成功/失败的标志存入receving
+    // 获得rx_buffer
     bool receiving = StartReceive();
 
+    // 进入死循环
     while (1)
     {
-        // 等待接收完成或错误通知（有其中一个就可以）
-        // 3表示同时等待第0位和第1位
-        uint32_t flags =osThreadFlagsWait(UART_RX_DONE | UART_RX_ERROR,osFlagsWaitAny,20);
+        uint32_t flags = osThreadFlagsWait(UART_RX_DONE | UART_RX_ERROR, osFlagsWaitAny, 20);
 
-        // 如果错误或者错误且完成接收
+        // 错误时，中断接收，清空状态，设置为未接收数据状态
         if (flags == UART_RX_ERROR || flags == 3)
         {
-            // 停止接收
             HAL_UART_AbortReceive(&huart1);
 
-            // 硬件接收错误，重新开始接收
             UART_Reset();
 
             receiving = false;
         }
 
-
-        // 如果完成而无错误
+        // 接收八字节成功（但数据不一定准确）
         else if (flags == UART_RX_DONE)
         {
-            // 普通DMA模式下，本次接收已经停止
+            // 停止接收状态
             receiving = false;
 
-            // 逐字节处理数据
             for (uint16_t i = 0; i < rx_length; i++)
             {
-                if (UART_Input(rx_buffer[i], &command))
+                // 对接收到的数据逐个解析，再判断返回结果（只有8字节了才返回true）
+                bool frame_ok = UART_Input(rx_buffer[i], &command);
+
+                if (frame_ok == true)
                 {
-                    // 只有完整有效帧才能刷新连接时间
-                    last_receive = osKernelGetTickCount();
+                    // 只有完整有效帧才刷新连接时间
+                    host_time = HAL_GetTick();
 
-                    connected = true;
+                    // 上位机的急停是将最大速度和目标速度都设置为0
+                    if (command.mode == 0x00)
+                    {
+                        if (command.a <= 0)
+                        {
+                            host_stop = true;
+                        }
+                        else
+                        {
+                            host_stop = false;
+                        }
+                    }
 
-                    // 能正常接收，表明连接正常，开灯
+                    // 任意合法模式的数据包都能表明通信正常
+                    host_connected = true;
+
+                    // 连接正常，开灯
                     Led_Set(true);
                 }
             }
         }
 
-        // 数据处理完成后，开启下一次接收
-        // 如果启动失败，下一轮继续尝试（自动重连）
-        if (receiving==false)
+        // 接收停止或者发生错误后，尝试重新开启
+        if (receiving == false)
         {
-            // 一直尝试，知道可以
             receiving = StartReceive();
         }
 
-        uint32_t now = osKernelGetTickCount();
+        uint32_t now = HAL_GetTick();
 
-
-        // 上位机定时发送数据，据此检测上位机是否连接
-        // 1.5秒没有收到有效命令，认为上位机断开（正常上位机最长不会超过1000ms没有发送）
-        if (connected && (uint32_t)(now - last_receive) >= 1500)
+        // 没收到数据时，也必须检查连接是否超时
+        if (host_connected == true)
         {
-            connected = false;
+            if ((uint32_t)(now - host_time) >= HOST_TIMEOUT_MS)
+            {
+                host_connected = false;
 
-            // 关灯
-            Led_Set(false);
+                Led_Set(false);
 
-            // 清除旧命令
-            command = (Command){0};
-
-            // 清除未完成的旧半帧
-            UART_Reset();
+                command = (Command){0};
+                UART_Reset();
+            }
         }
 
-
-        // 每20ms尝试发送一次当前反馈
+        // 没收到数据时，也继续发送反馈
+        // 每20ms尝试通过DMA发送实际反馈
         if ((uint32_t)(now - last_send) >= 20)
         {
-            // 重置时间
             last_send = now;
+
+            // 实际输出轴速度，转换为协议要求的整数
+            int16_t speed = (int16_t)motor_data.output_speed;
+
+            // 多圈位置会持续累计，发送前限制在int16范围内
+            float position_value = motor_data.position;
+
+            if (position_value > 32767.0f)
+            {
+                position_value = 32767.0f;
+            }
+            else if (position_value < -32768.0f)
+            {
+                position_value = -32768.0f;
+            }
+
+            int16_t position = (int16_t)position_value;
+
+            uint8_t state = motor_state;
 
             UART_Send(state, speed, position);
         }
     }
 }
 
+/*----------------------------------回调---------------------------------------*/
 // 接收结束回调，只记录长度并置flag为1（接收完成）
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {

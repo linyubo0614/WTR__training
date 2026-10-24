@@ -3,37 +3,35 @@
 #include "CANCommunication.h"
 #include "main.h"
 #include "cmsis_os2.h"
+#include "uart_task.h"
+#include <math.h>
+
+// 初始反馈状态
+volatile uint8_t motor_state = 0xFF;
+
+// 电机运行状态枚举
+typedef enum
+{
+    MOTOR_STOP,
+    MOTOR_READY,
+    MOTOR_RUN
+} MotorState;
 
 // 速度环PID（具体参数还得调）
 PID_t speedPID =
-{
-    .KP = 10.0f,
-    .KI = 0.01f,
-    .KD = 0.0f,
+    {
+        .KP = 10.0f,
+        .KI = 0.01f,
+        .KD = 0.0f,
 
-    // 作业设定的4000上限
-    .outputMax = 4000.0f,
+        // 作业设定的4000上限
+        .outputMax = 4000.0f,
 
-    // 内环使用I，同时加积分限幅
-    .integralMax = 1000.0f
-};
-
-// 位置环PID（具体参数还得调）
-static PID_t posisionPID =
- {
-    .KP = 2.0f,
-    .KI = 0.0f,
-    .KD = 0.0f,
-
-    // 目标转速最大绝对值，单位 rpm
-    .outputMax = 120.0f,
-
-    // 外环先不使用积分
-    .integralMax = 0.0f
-};
+        // 内环使用I，同时加积分限幅
+        .integralMax = 1000.0f};
 
 /*------------------------给定目标后计算 速度PID（内环） 并且控制电调-------------------------------*/
-// ref反馈输入，位置式pid速度闭环实现任务2的给定方波自动跟随
+// ref为目标速度，位置式pid速度闭环实现任务2的给定方波自动跟随
 static void speedServo(float ref)
 {
     // 目标速度
@@ -49,78 +47,101 @@ static void speedServo(float ref)
     CAN_SendCurrent((int16_t)speedPID.output);
 }
 
-/*-------------------------给定目标后计算 位置PID（外环） 并且控制电调-------------------------------*/
-/**
- * ref 为目标角度
- * max_speed 为最大转速
- *  */ 
-static void positionServo(float ref, float max_speed)
-{
-    // 目标位置
-    posisionPID.ref = ref;
-
-    // 实际位置
-    posisionPID.fdb = motor_data.position;
-
-    // 输出限幅
-    posisionPID.outputMax = max_speed;
-
-    // 执行一次位置式PID计算
-    PID_Calc(&posisionPID);
-
-    // 将目标转速交给速度环（外环）
-    speedServo(posisionPID.output);
-}
-
 /*------------------------------给定方波并跟随------------------------------------------*/
-// 检查电调有没有正常反馈；正常就计算PID并发送电流，失联就发送零电流。按1ms周期重复这个过程。
+// 检查电调有没有正常反馈；正常就计算PID并发送电流，失联就发送零电流
 void MotorTask(void *argument)
 {
     (void)argument;
 
-    // 是否开始方波
+    // 上电停止，等待停止指令和启动请求
+    MotorState run_state = MOTOR_STOP;
+
+    // 方波是否已经开始计时
     bool running = false;
 
-    // 方波开始运行的时间ms
     uint32_t start_time = 0;
 
     while (1)
     {
+        uint32_t feedback_time = motor_data.time_ms;
+        uint32_t receive_time = host_time;
         uint32_t now = HAL_GetTick();
 
-        // 失联情况
-        // 未收到过反馈，或超过100ms没有再次反馈
-        if (!motor_data.received ||(uint32_t)(now - motor_data.time_ms) >= 100)
-        {
-            // 清除历史积分和误差
-            PID_Reset(&speedPID);
+        // 电机反馈是否正常
+        bool motor_ok =
+            motor_data.received &&
+            (uint32_t)(now - feedback_time) < 100;
 
-            // 失联电流发送0
+        // 上位机连接是否正常
+        bool host_ok =
+            host_connected &&
+            (uint32_t)(now - receive_time) < HOST_TIMEOUT_MS;
+
+        // 确定运行状态
+        if (!motor_ok || !host_ok)
+        {
+            run_state = MOTOR_STOP;
+
+            // 失联后不沿用之前收到的停止指令
+            host_stop = false;
+        }
+        else if (host_stop)
+        {
+            run_state = MOTOR_READY;
+        }
+        else if (run_state == MOTOR_READY)
+        {
+            run_state = MOTOR_RUN;
+        }
+
+        if (run_state != MOTOR_RUN)
+        {
+            PID_Reset(&speedPID);
             CAN_SendCurrent(0);
 
             running = false;
+
+            if (!motor_ok)
+            {
+                // CAN反馈异常
+                motor_state = 0xFF;
+            }
+            else
+            {
+                // 速度模式，不报告目标已经到达
+                motor_state = 0xAA;
+            }
         }
         else
         {
-            // 第一次启动/中断后重新恢复正常时，从200rpm开始
-            if (running==false)
+            // 每次启动，方波从200rpm开始
+            if (!running)
             {
                 start_time = now;
                 running = true;
             }
 
-            // 计算已经经过了多少个完整的1秒
             uint32_t seconds = (now - start_time) / 1000;
 
-            // 第偶数秒内目标200rpm
             if (seconds % 2 == 0)
             {
                 speedServo(200.0f);
             }
-            // 第奇数秒内目标0rpm
             else
             {
                 speedServo(0.0f);
+            }
+
+            // 判断实际速度是否接近当前目标速度
+            if (fabsf(speedPID.ref - motor_data.output_speed) < 5.0f)
+            {
+                // 速度模式，已经到达目标
+                motor_state = 0xAF;
+            }
+            else
+            {
+                // 速度模式，正在接近目标
+                motor_state = 0xAA;
             }
         }
 
