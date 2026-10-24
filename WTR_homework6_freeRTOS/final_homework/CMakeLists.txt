@@ -29,9 +29,11 @@ project(${CMAKE_PROJECT_NAME})
 message("Build type: " ${CMAKE_BUILD_TYPE})
 
 # Enable CMake support for ASM and C languages
-enable_language(C ASM)
+enable_language(C CXX ASM)
 
 # Create an executable object type
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_executable(${CMAKE_PROJECT_NAME})
 
 # Add STM32CubeMX generated sources
@@ -43,14 +45,24 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 # Add sources to executable
+file(GLOB_RECURSE USER_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/UserCode/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/UserCode/*.cpp"
+)
+
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
+    ${USER_SOURCES}
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined include paths
+    "${CMAKE_CURRENT_SOURCE_DIR}/UserCode"
+    "${CMAKE_CURRENT_SOURCE_DIR}/UserCode/CAN"
+    "${CMAKE_CURRENT_SOURCE_DIR}/UserCode/CRC"
+    "${CMAKE_CURRENT_SOURCE_DIR}/UserCode/UART"
+    "${CMAKE_CURRENT_SOURCE_DIR}/UserCode/PID"
 )
+    # Add user defined include path
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

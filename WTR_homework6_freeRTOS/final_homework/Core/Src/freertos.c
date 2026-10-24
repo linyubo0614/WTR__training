@@ -47,12 +47,26 @@
 /* USER CODE BEGIN Variables */
 
 /* USER CODE END Variables */
-/* Definitions for defaultTask */
-osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = {
-  .name = "defaultTask",
-  .stack_size = 128 * 4,
+/* Definitions for initTask */
+osThreadId_t initTaskHandle;
+const osThreadAttr_t initTask_attributes = {
+  .name = "initTask",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityHigh,
+};
+/* Definitions for uartTask */
+osThreadId_t uartTaskHandle;
+const osThreadAttr_t uartTask_attributes = {
+  .name = "uartTask",
+  .stack_size = 384 * 4,
   .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for motorTask */
+osThreadId_t motorTaskHandle;
+const osThreadAttr_t motorTask_attributes = {
+  .name = "motorTask",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal,
 };
 
 /* Private function prototypes -----------------------------------------------*/
@@ -60,7 +74,9 @@ const osThreadAttr_t defaultTask_attributes = {
 
 /* USER CODE END FunctionPrototypes */
 
-void StartDefaultTask(void *argument);
+void Init(void *argument);
+void UartTask(void *argument);
+void MotorTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -91,8 +107,14 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  /* creation of initTask */
+  initTaskHandle = osThreadNew(Init, NULL, &initTask_attributes);
+
+  /* creation of uartTask */
+  uartTaskHandle = osThreadNew(UartTask, NULL, &uartTask_attributes);
+
+  /* creation of motorTask */
+  motorTaskHandle = osThreadNew(MotorTask, NULL, &motorTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -104,22 +126,54 @@ void MX_FREERTOS_Init(void) {
 
 }
 
-/* USER CODE BEGIN Header_StartDefaultTask */
+/* USER CODE BEGIN Header_Init */
 /**
-  * @brief  Function implementing the defaultTask thread.
+  * @brief  Function implementing the initTask thread.
   * @param  argument: Not used
   * @retval None
   */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument)
+/* USER CODE END Header_Init */
+__weak void Init(void *argument)
 {
-  /* USER CODE BEGIN StartDefaultTask */
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+}
+
+/* USER CODE BEGIN Header_UartTask */
+/**
+* @brief Function implementing the uartTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_UartTask */
+__weak void UartTask(void *argument)
+{
+  /* USER CODE BEGIN UartTask */
   /* Infinite loop */
   for(;;)
   {
     osDelay(1);
   }
-  /* USER CODE END StartDefaultTask */
+  /* USER CODE END UartTask */
+}
+
+/* USER CODE BEGIN Header_MotorTask */
+/**
+* @brief Function implementing the motorTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_MotorTask */
+__weak void MotorTask(void *argument)
+{
+  /* USER CODE BEGIN MotorTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END MotorTask */
 }
 
 /* Private application code --------------------------------------------------*/
