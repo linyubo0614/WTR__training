@@ -14,8 +14,11 @@ typedef enum
     MOTOR_RUN    // 已允许启动
 } MotorState;
 
-// 初始状态，不允许启动
+// 上电先保持不允许启动，收到有效命令再进入ready
 static volatile MotorState run_state = MOTOR_STOP;
+
+// 首次启动直接可以接收命令，不用先按急停
+static bool first_start = true;
 
 /**
  * motor_state 是协议规定的反馈状态
@@ -105,15 +108,14 @@ void Motor_SetCommand(const Command *command)
         // 切换为停止但是允许启动模式
         if (command->mode == 0x00 && command->a == 0)
             run_state = MOTOR_READY;
+
         // 如果是允许启动状态但是还暂停，切换为运行状态
-        else if (run_state == MOTOR_READY)
+        else if (first_start || run_state == MOTOR_READY)
             run_state = MOTOR_RUN;
+            first_start = false;
     }
 
-    motor_command = *command;
-    upper_time = now;
-    upper_connected = true;
-
+    
     // 判断是否发生改变，如果是定时发送相同信息则可能不改变
     bool changed = command->mode != motor_command.mode ||
                    command->a != motor_command.a ||
@@ -126,6 +128,12 @@ void Motor_SetCommand(const Command *command)
     // 停止后重新启动，即使目标相同，也需要重新开始动作
     if (changed || (last_state != MOTOR_RUN && run_state == MOTOR_RUN))
         command_id++;
+
+    // 保存最新一次命令
+    motor_command = *command;
+    upper_time = now;
+    upper_connected = true;
+
 
     osKernelRestoreLock(lock_state);
 }
@@ -160,12 +168,12 @@ void MotorTask(void *argument)
         if(command.mode==0x11||(command.mode == 0x22 && command.action_id == 0x11111111))
         {
             // 速度
-            state==0xBA;
+            state=0xBA;
         }
         if(command.mode==0x22||(command.mode == 0x22 && command.action_id == 0x000000000))
         {
             // 位置
-            state==0xAA;
+            state=0xAA;
         }
 
         // 重置
