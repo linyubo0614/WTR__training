@@ -1,171 +1,159 @@
 #include "uart_task.h"
 #include "UARTCommunication.h"
+#include "motor_task.h"
+#include "CANCommunication.h"
 #include "usart.h"
 #include "led.h"
 #include "cmsis_os2.h"
 
-// 第0位：接收完成
+// 设置两个标志，分别标记接收到数据 与 接收数据错误
 #define UART_RX_DONE 1
-
-// 第1位：串口发生错误
 #define UART_RX_ERROR 2
 
-// 串口任务句柄
+// 与上位机连接
+volatile bool upper_connected = false;
+
+// 上次收到有效命令的时间
+volatile uint32_t upper_time = 0;
+
+// 任务线程id，供回调函数内设置flag
 static osThreadId_t uart_handle;
 
-// DMA接收缓冲区
+// 接收缓冲区
 static uint8_t rx_buffer[32];
-
-// 本次接收的字节数
+// 本次收到的字节数（防止解析的时候解析到后面的垃圾数据）
 static volatile uint16_t rx_length = 0;
 
-// 启动一次DMA接收，开始接收（来自上位机的数据）
+
+//--------------------------------------启动DMA接收------------------------------
 static bool StartReceive(void)
 {
-    HAL_StatusTypeDef result =
-        HAL_UARTEx_ReceiveToIdle_DMA(
-            &huart1,
-            rx_buffer,
-            sizeof(rx_buffer));
+    HAL_StatusTypeDef result = HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rx_buffer, sizeof(rx_buffer));
 
     if (result != HAL_OK)
-    {
-        // 接收失败
         return false;
-    }
 
-    // 每次启动后，关闭半传输中断
+    // 关闭传输过半中断
     __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
-
     return true;
 }
 
-// 串口任务入口
-void UartTask(void *argument)
-{
-    (void)argument;
-
-    uart_handle = osThreadGetId();
-
-    // 最近一次解析成功的命令
-    Command command = {0};
-
-    // 上位机连接状态
-    bool connected = false;
-
-    // 最近一次收到有效命令的时刻
-    uint32_t last_receive = 0;
-
-    // 上次发送反馈的时刻
-    uint32_t last_send = osKernelGetTickCount();
-
-    // 尚未取得电机反馈时的初始状态
-    uint8_t state = 0xFF;
-    int16_t speed = 0;
-    int16_t position = 0;
-
-    UART_Reset();
-
-    // 启动第一次接收
-    // receiving用于保存接收状态
-    bool receiving = StartReceive();
-
-    while (1)
-    {
-        // 等待接收完成或错误通知（有其中一个就可以）
-        // 3表示同时等待第0位和第1位
-        uint32_t flags =osThreadFlagsWait(UART_RX_DONE | UART_RX_ERROR,osFlagsWaitAny,20);
-
-        // 如果错误或者错误且完成接收
-        if (flags == UART_RX_ERROR || flags == 3)
-        {
-            // 停止接收
-            HAL_UART_AbortReceive(&huart1);
-
-            // 硬件接收错误，重新开始接收
-            UART_Reset();
-
-            receiving = false;
-        }
-
-
-        // 如果完成而无错误
-        else if (flags == UART_RX_DONE)
-        {
-            // 普通DMA模式下，本次接收已经停止
-            receiving = false;
-
-            // 逐字节处理数据
-            for (uint16_t i = 0; i < rx_length; i++)
-            {
-                if (UART_Input(rx_buffer[i], &command))
-                {
-                    // 只有完整有效帧才能刷新连接时间
-                    last_receive = osKernelGetTickCount();
-
-                    connected = true;
-
-                    // 能正常接收，表明连接正常，开灯
-                    Led_Set(true);
-                }
-            }
-        }
-
-        // 数据处理完成后，开启下一次接收
-        // 如果启动失败，下一轮继续尝试（自动重连）
-        if (receiving==false)
-        {
-            // 一直尝试，知道可以
-            receiving = StartReceive();
-        }
-
-        uint32_t now = osKernelGetTickCount();
-
-
-        // 上位机定时发送数据，据此检测上位机是否连接
-        // 1.5秒没有收到有效命令，认为上位机断开（正常上位机最长不会超过1000ms没有发送）
-        if (connected && (uint32_t)(now - last_receive) >= 1500)
-        {
-            connected = false;
-
-            // 关灯
-            Led_Set(false);
-
-            // 清除旧命令
-            command = (Command){0};
-
-            // 清除未完成的旧半帧
-            UART_Reset();
-        }
-
-
-        // 每20ms尝试发送一次当前反馈
-        if ((uint32_t)(now - last_send) >= 20)
-        {
-            // 重置时间
-            last_send = now;
-
-            UART_Send(state, speed, position);
-        }
-    }
-}
-
-// 接收结束回调，只记录长度并置flag为1（接收完成）
+//---------------------------------------两个中断回调函数---------------------------
+// 只记录长度并通知任务
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if (huart->Instance == USART1)
     {
         rx_length = Size;
-
         osThreadFlagsSet(uart_handle, UART_RX_DONE);
     }
 }
 
-// 串口错误回调，通知任务恢复接收
+// 只是用来设置flag
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART1)
-    {
         osThreadFlagsSet(uart_handle, UART_RX_ERROR);
+}
+
+//-----------------------------对上报上位机数据的初步处理---------------------------------
+// 两字节int16，必须限幅不然装不下
+// 之后转化为int16，再发送给上位机
+/**
+ * 需要说明的是，传输两个字节是受限于协议
+ * 如果实际speed或者posision超过范围，上位机只能收到最大/最小值
+ * 但是在PID计算的时候没有这个限制，仍然可以利用实际值
+ * 所以影响不大
+ */
+static int16_t ToInt16(float value)
+{
+    if (value > 32767.0f)
+        return 32767;
+    if (value < -32768.0f)
+        return -32768;
+    return (int16_t)value;
+}
+
+//-----------------------------------------------串口任务---------------------------------
+/**
+ * 用来开启DMA
+ * 将从上位机处接收到的命令传到电机任务
+ * 将下位机从电调处得到的数据反馈给上位机
+*/
+void UartTask(void *argument)
+{
+    (void)argument;
+
+    // 获取当前线程id
+    uart_handle = osThreadGetId();
+
+    // 初始化命令结构体
+    Command command = {0};
+
+    // 上次发送反馈的时间（第一次用当前时间初始化）
+    uint32_t last_send = HAL_GetTick();
+
+    // 清空已有字节
+    UART_Reset();
+
+    // 如果开启了设为ture，可以再次开始设为false
+    bool receiving = StartReceive();
+
+    while (1)
+    {
+        uint32_t flags = osThreadFlagsWait(UART_RX_DONE | UART_RX_ERROR, osFlagsWaitAny, 20);
+
+        // 错误
+        if (flags == UART_RX_ERROR || flags == 3)
+        {
+            // 停止接收
+            HAL_UART_AbortReceive(&huart1);
+            UART_Reset();
+            receiving = false;
+        }
+
+        // 正常完成
+        else if (flags == UART_RX_DONE)
+        {
+            receiving = false;
+
+            for (uint16_t i = 0; i < rx_length; i++)
+            {
+                // 一个个字节放入数据流解析
+                bool frame_ok = UART_Input(rx_buffer[i], &command);
+                if (frame_ok)
+                {
+                    Motor_SetCommand(&command);
+                    Led_Set(true);
+                }
+            }
+        }
+
+        // 处理后如果可以开启，就尝试开启DMA
+        // 同时如果开启失败就返回false，从而再次开启，实现自动重连
+        if (receiving==false)
+            receiving = StartReceive();
+    
+        uint32_t now = HAL_GetTick();
+
+        // 如果上位机连接，但是超时（设置为1500ms）了，认定为断开
+        if (upper_connected && (uint32_t)(now - upper_time) >= UPPER_TIMEOUT_MS)
+        {
+            upper_connected = false;
+            Led_Set(false);
+            UART_Reset();
+        }
+
+        // 控制反馈发送间隔
+        if ((uint32_t)(now - last_send) >= 20)
+        {
+            last_send = now;
+
+            // 将当前速度与位置（来自电调）转化为16字节整数后传回串口
+            int16_t speed = ToInt16(motor_data.output_speed);
+            int16_t position = ToInt16(motor_data.position);
+            UART_Send(motor_state, speed, position);
+        }
     }
 }
+

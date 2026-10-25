@@ -61,6 +61,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/UserCode/CRC"
     "${CMAKE_CURRENT_SOURCE_DIR}/UserCode/UART"
     "${CMAKE_CURRENT_SOURCE_DIR}/UserCode/PID"
+    "${CMAKE_CURRENT_SOURCE_DIR}/UserCode/LED"
 )
     # Add user defined include path
 

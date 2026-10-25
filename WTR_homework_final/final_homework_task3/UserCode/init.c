@@ -9,10 +9,10 @@ void Init(void *argument)
 {
     (void)argument;
 
-    // 上位机尚未连接，先熄灭LED
+    // 还没连接先熄灭LED
     Led_Set(false);
 
-    // 配置CAN并开启接收通知
+    // 开启CAN1
     if (!CAN_Start())
     {
         Error_Handler();

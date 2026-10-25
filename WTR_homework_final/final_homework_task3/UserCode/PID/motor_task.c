@@ -1,128 +1,246 @@
 #include "motor_task.h"
 #include "pid.h"
+#include "action.h"
 #include "CANCommunication.h"
+#include "uart_task.h"
 #include "main.h"
 #include "cmsis_os2.h"
+#include <math.h>
 
-// 速度环PID（具体参数还得调）
-PID_t speedPID =
+typedef enum
 {
+    MOTOR_STOP,  // 没有启动资格
+    MOTOR_READY, // 允许启动，等待启动
+    MOTOR_RUN    // 已允许启动
+} MotorState;
+
+// 初始状态，不允许启动
+static volatile MotorState run_state = MOTOR_STOP;
+
+/**
+ * motor_state 是协议规定的反馈状态
+ * 0xAA 速度模式 正在前往目标速度
+ * 0xAF 速度模式 到达目标速度
+ * 0xBA 位置控制 正在前往目标位置
+ * 0xBF 位置控制 到达目标位置
+ * 0xFF 异常
+ */
+volatile uint8_t motor_state = 0xFF;
+
+// 以下参数都暂定
+// 速度环输出电流指令
+PID_t speedPID = {
     .KP = 10.0f,
     .KI = 0.01f,
     .KD = 0.0f,
-
-    // 作业设定的4000上限
-    .outputMax = 4000.0f,
-
-    // 内环使用I，同时加积分限幅
-    .integralMax = 1000.0f
+    .outputMax = MOTOR_CURRENT_LIMIT, // 输出电流限幅
+    .integralMax = 1000.0f            // 积分限幅
 };
 
-// 位置环PID（具体参数还得调）
-static PID_t posisionPID =
- {
+// 位置环输出作为输出轴目标转速
+PID_t posPID = {
     .KP = 2.0f,
     .KI = 0.0f,
     .KD = 0.0f,
-
-    // 目标转速最大绝对值，单位 rpm
-    .outputMax = 120.0f,
-
-    // 外环先不使用积分
-    .integralMax = 0.0f
+    .outputMax = 120.0f, // 输出转速限幅
+    .integralMax = 20.0f // 积分限幅（外环先不用I）
 };
 
-/*------------------------给定目标后计算 速度PID（内环） 并且控制电调-------------------------------*/
-// ref反馈输入，位置式pid速度闭环实现任务2的给定方波自动跟随
+// ---------------------------------串级PID计算与将信息传入CAN ------------------------------------------
+/**
+ * 内环速度环，外环位置环
+ *
+ * 我把任务2的“在速度闭环的基础上通过串级 PID 构成位置闭环。输入为 角度 deg”
+ * 和任务1，3的要求合并了
+ * 另外一个task2的文件夹中的pid只是单环PID，用于实现给定方波跟随
+ */
+// ref 目标速度，单位rpm
 static void speedServo(float ref)
 {
-    // 目标速度
     speedPID.ref = ref;
-
-    // 实际输出轴速度
     speedPID.fdb = motor_data.output_speed;
-
-    // 执行一次位置式PID计算
     PID_Calc(&speedPID);
-
-    // PID输出电流指令发送给电调
     CAN_SendCurrent((int16_t)speedPID.output);
 }
 
-/*-------------------------给定目标后计算 位置PID（外环） 并且控制电调-------------------------------*/
-/**
- * ref 为目标角度
- * max_speed 为最大转速
- *  */ 
+// ref 目标位置（角度），单位deg
 static void positionServo(float ref, float max_speed)
 {
-    // 目标位置
-    posisionPID.ref = ref;
-
-    // 实际位置
-    posisionPID.fdb = motor_data.position;
-
-    // 输出限幅
-    posisionPID.outputMax = max_speed;
-
-    // 执行一次位置式PID计算
-    PID_Calc(&posisionPID);
-
-    // 将目标转速交给速度环（外环）
-    speedServo(posisionPID.output);
+    posPID.ref = ref;
+    posPID.fdb = motor_data.position;
+    posPID.outputMax = max_speed;
+    PID_Calc(&posPID);
+    speedServo(posPID.output);
 }
 
-/*------------------------------给定方波并跟随------------------------------------------*/
-// 检查电调有没有正常反馈；正常就计算PID并发送电流，失联就发送零电流。按1ms周期重复这个过程。
+// ----------------------------------获取指令 调度状态--------------------------------
+/**
+ * 本函数接收来自串口的指令
+ * 用于调度状态
+ */
+// 收到的指令，来自串口（在UartTask中调用）
+static volatile Command motor_command = {0};
+// 指令id，每次接收到命令后用于判断是否切换到新的运行状态
+// 如果切换或者断联后重新恢复连接 需要重置PID，否则不用管
+static volatile uint32_t command_id = 0;
+
+void Motor_SetCommand(const Command *command)
+{
+    int32_t lock_state = osKernelLock();
+
+    // 上次收到CAN反馈的时间
+    uint32_t feedback_time = motor_data.time_ms;
+    uint32_t now = HAL_GetTick();
+
+    // 是否收到过电调反馈，并且最近100 ms内仍有反馈（用于判断电调和下位机是否正常连通）
+    bool motor_ok = motor_data.received && (uint32_t)(now - feedback_time) < 100;
+
+    // 必须上下位机连接正常，下位机与电调连接顺畅才判断，否则判断为无启动条件
+    if (!motor_ok || !upper_connected || (uint32_t)(now - upper_time) >= UPPER_TIMEOUT_MS)
+        run_state = MOTOR_STOP;
+
+    if (motor_ok)
+    {
+        // 如果上位机急停（切换为速度模式，且最大速度限制为0）
+        // 切换为停止但是允许启动模式
+        if (command->mode == 0x00 && command->a == 0)
+            run_state = MOTOR_READY;
+        // 如果是允许启动状态但是还暂停，切换为运行状态
+        else if (run_state == MOTOR_READY)
+            run_state = MOTOR_RUN;
+    }
+
+    motor_command = *command;
+    upper_time = now;
+    upper_connected = true;
+
+    // 判断是否发生改变，如果是定时发送相同信息则可能不改变
+    bool changed = command->mode != motor_command.mode ||
+                   command->a != motor_command.a ||
+                   command->b != motor_command.b ||
+                   command->action_id != motor_command.action_id;
+
+    MotorState last_state = run_state;
+
+    // 重复定时发送相同的指令不改变编号，不会重置PID或重启预设动作
+    // 停止后重新启动，即使目标相同，也需要重新开始动作
+    if (changed || (last_state != MOTOR_RUN && run_state == MOTOR_RUN))
+        command_id++;
+
+    osKernelRestoreLock(lock_state);
+}
+
+// ---------------------------------根据指令控制电机------------------------------
+
 void MotorTask(void *argument)
 {
     (void)argument;
 
-    // 是否开始方波
-    bool running = false;
-
-    // 方波开始运行的时间ms
-    uint32_t start_time = 0;
+    uint32_t last_id = 0;
 
     while (1)
     {
+        Command command = motor_command;
+        uint32_t current_id = command_id;
+        uint32_t feedback_time = motor_data.time_ms;
+        uint32_t receive_time = upper_time;
         uint32_t now = HAL_GetTick();
 
-        // 失联情况
-        // 未收到过反馈，或超过100ms没有再次反馈
-        if (!motor_data.received ||(uint32_t)(now - motor_data.time_ms) >= 100)
+        // 下位机与电调连接是否正常
+        bool motor_ok = motor_data.received && (uint32_t)(now - feedback_time) < 100;
+        // 上位机与下位机连接是否正常
+        bool upper_ok = upper_connected && (uint32_t)(now - receive_time) < UPPER_TIMEOUT_MS;
+
+        // 其中一个出问题就设置为不允许启动状态
+        if (!motor_ok || !upper_ok)
+            run_state = MOTOR_STOP;
+
+        uint8_t state;
+
+        if(command.mode==0x11||(command.mode == 0x22 && command.action_id == 0x11111111))
         {
-            // 清除历史积分和误差
+            // 速度
+            state==0xBA;
+        }
+        if(command.mode==0x22||(command.mode == 0x22 && command.action_id == 0x000000000))
+        {
+            // 位置
+            state==0xAA;
+        }
+
+        // 重置
+        if (run_state != MOTOR_RUN)
+        {
             PID_Reset(&speedPID);
-
-            // 失联电流发送0
+            PID_Reset(&posPID);
             CAN_SendCurrent(0);
-
-            running = false;
         }
         else
         {
-            // 第一次启动/中断后重新恢复正常时，从200rpm开始
-            if (running==false)
+            // 状态切换，重置
+            if (current_id != last_id)
             {
-                start_time = now;
-                running = true;
+                PID_Reset(&speedPID);
+                PID_Reset(&posPID);
+                Action_Start(now);
+                last_id = current_id;
             }
 
-            // 计算已经经过了多少个完整的1秒
-            uint32_t seconds = (now - start_time) / 1000;
+            // 位置模式与预设模式使用作业规定的电流上限
+            speedPID.outputMax = MOTOR_CURRENT_LIMIT;
 
-            // 第偶数秒内目标200rpm
-            if (seconds % 2 == 0)
+            // 使用状态机
+            switch (command.mode)
             {
-                speedServo(200.0f);
+            case 0x00:
+                // A为电流上限，B为输出轴目标转速
+                // 限幅
+                speedPID.outputMax = command.a;
+                if (speedPID.outputMax > MOTOR_CURRENT_LIMIT)
+                    speedPID.outputMax = MOTOR_CURRENT_LIMIT;
+
+                speedServo((float)command.b);
+                // 允许一定的误差
+                if (fabsf(speedPID.ref - motor_data.output_speed) < 5.0f)
+                    state = 0xAF;
+                break;
+
+            case 0x11:
+                // A为最大输出轴转速，B为目标角度
+                positionServo((float)command.b, (float)command.a);
+
+                if (fabsf(posPID.ref - motor_data.position) < 2.0f &&
+                    fabsf(motor_data.output_speed) < 5.0f)
+                    state = 0xBF;
+                break;
+
+            case 0x22:
+            {
+                float ref;
+                bool finished;
+
+                // 预设动作1
+                if (command.action_id == 0x00000000)
+                {
+                    finished = SpeedAction(now, &ref);
+                    speedServo(ref);
+                    if (finished && fabsf(motor_data.output_speed) < 5.0f)
+                        state = 0xAF;
+                }
+                // 预设动作2（可以用else是因为Decode里面已经丢弃其他错误指令了）
+                else
+                {
+                    finished = PositionAction(now, motor_data.position,motor_data.output_speed, &ref);
+                    positionServo(ref, 120.0f);
+                    if (finished)
+                        state = 0xBF;
+                }
+                break;
             }
-            // 第奇数秒内目标0rpm
-            else
-            {
-                speedServo(0.0f);
             }
         }
+
+        motor_state = motor_ok ? state : 0xFF;
 
         osDelay(2);
     }

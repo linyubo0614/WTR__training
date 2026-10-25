@@ -25,7 +25,7 @@ void PID_Calc(PID_t *pid)
     // 4. D
     float d = pid->KD *(pid->cur_error - pid->last_error);
 
-    // 5. 位置式PID：直接计算本次完整输出
+    // 5. 位置式PID
     pid->output = p + pid->integral + d;
 
     // 6. 输出限幅
@@ -42,7 +42,8 @@ void PID_Calc(PID_t *pid)
     pid->last_error = pid->cur_error;
 }
 
-// 清除运行状态，保留参数、目标和反馈
+// 重置状态，急停的时候使用
+// 防止一恢复就全力转动
 void PID_Reset(PID_t *pid)
 {
     pid->cur_error = 0.0f;

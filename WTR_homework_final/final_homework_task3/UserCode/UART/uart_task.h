@@ -1,7 +1,14 @@
 #ifndef UART_TASK_H
 #define UART_TASK_H
 
-// 串口任务入口
+#include <stdbool.h>
+#include <stdint.h>
+
+#define UPPER_TIMEOUT_MS 1500
+
+extern volatile bool upper_connected;
+extern volatile uint32_t upper_time;
+
 void UartTask(void *argument);
 
 #endif
