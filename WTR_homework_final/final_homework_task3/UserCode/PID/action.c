@@ -4,71 +4,130 @@
 static uint32_t start_time = 0;
 static uint32_t wait_time = 0;
 static uint8_t step = 0;
-static bool waiting = false;
 
 void Action_Start(uint32_t now)
 {
     start_time = now;
     wait_time = now;
     step = 0;
-    waiting = false;
 }
 
 // 速度：60、120、180、240、300、150、0rpm 各一秒
 bool SpeedAction(uint32_t now, float *ref)
 {
-    uint32_t elapsed = now - start_time;
+    uint32_t pased_time = now - start_time;
 
-    if (elapsed < 1000)
+    if (pased_time < 1000)
         *ref = 60.0f;
-    else if (elapsed < 2000)
+    else if (pased_time < 2000)
         *ref = 120.0f;
-    else if (elapsed < 3000)
+    else if (pased_time < 3000)
         *ref = 180.0f;
-    else if (elapsed < 5000)
+    else if (pased_time < 5000)
         *ref = 240.0f;
-    else if (elapsed < 7000)
+    else if (pased_time < 7000)
         *ref = 300.0f;
-    else if (elapsed < 8000)
+    else if (pased_time < 8000)
         *ref = 150.0f;
     else
         *ref = 0.0f;
 
-    // 第8至9秒执行零转速阶段，之后保持零转速
-    return elapsed >= 9000;
+    // 之后保持零转速
+    return pased_time >= 9000;
 }
 
-// 位置序列：先到0°，再到720°停3秒、360°停1秒，最后回0°
+
+static float start_position = 0.0f;
+
+// 位置：先到0°，再到720°停3秒，360°停1秒，最后回0°
+// 主要是需要判断是否到位了（从一个位置到另一个位置的时间不固定）
+// 再计算时间
+// 传入的是相对于初始零点的位置和当前速度
+// 以当前位置为0点
 bool PositionAction(uint32_t now, float position, float speed, float *ref)
 {
-    static const float target[4] = {0.0f, 720.0f, 360.0f, 0.0f};
-    static const uint32_t duration[4] = {0, 3000, 1000, 0};
-
-    *ref = target[step];
-
-    bool reached = fabsf(*ref - position) < 2.0f && fabsf(speed) < 5.0f;
-
-    if (!reached)
+    switch (step)
     {
-        // 停留期间离开允许范围，则重新计算连续停留时间
-        waiting = false;
-        return false;
-    }
+    case 0:
+        // 记录一次起点
+        start_position = position;
 
-    if (!waiting)
-    {
-        wait_time = now;
-        waiting = true;
-    }
+        // 从起点正向转720
+        *ref = start_position + 720.0f;
+        step = 1;
+        break;
 
-    if ((uint32_t)(now - wait_time) >= duration[step])
-    {
-        if (step == 3)
+    case 1:
+        // 前往起点+720°
+        *ref = start_position + 720.0f;
+
+        if (fabsf(*ref - position) < 2.0f && fabsf(speed) < 5.0f)
+        {
+            // 到位并停稳后开始计时
+            wait_time = now;
+            step = 2;
+        }
+        break;
+
+    case 2:
+        // 在起点+720°停留3秒
+        *ref = start_position + 720.0f;
+
+        if (fabsf(*ref - position) >= 2.0f || fabsf(speed) >= 5.0f)
+        {
+            // 偏离到位范围，重新等待到位并计时
+            // 回到步骤1，不重新记录起点
+            step = 1;
+        }
+        else if ((uint32_t)(now - wait_time) >= 3000)
+        {
+            *ref = start_position + 360.0f;
+            step = 3;
+        }
+        break;
+
+    case 3:
+        // 从起点+720°退回到起点+360°
+        *ref = start_position + 360.0f;
+
+        if (fabsf(*ref - position) < 2.0f && fabsf(speed) < 5.0f)
+        {
+            // 到位并停稳后开始计时
+            wait_time = now;
+            step = 4;
+        }
+        break;
+
+    case 4:
+        // 在起点+360°停留1秒
+        *ref = start_position + 360.0f;
+
+        if (fabsf(*ref - position) >= 2.0f || fabsf(speed) >= 5.0f)
+        {
+            step = 3;
+        }
+        else if ((uint32_t)(now - wait_time) >= 1000)
+        {
+            *ref = start_position;
+            step = 5;
+        }
+        break;
+
+    case 5:
+        // 回到本次动作的起点
+        *ref = start_position;
+
+        if (fabsf(*ref - position) < 2.0f && fabsf(speed) < 5.0f)
+        {
             return true;
+        }
+        break;
 
-        step++;
-        waiting = false;
-        *ref = target[step];
+    default:
+        // 状态异常时暂时保持当前位置，下一轮重新开始
+        *ref = position;
+        step = 0;
+        break;
     }
 
     return false;

@@ -33,8 +33,8 @@ volatile uint8_t motor_state = 0xFF;
 // 以下参数都暂定
 // 速度环输出电流指令
 PID_t speedPID = {
-    .KP = 10.0f,
-    .KI = 0.01f,
+    .KP = 25.0f,
+    .KI = 0.015f,
     .KD = 0.0f,
     .outputMax = MOTOR_CURRENT_LIMIT, // 输出电流限幅
     .integralMax = 1000.0f            // 积分限幅
@@ -42,7 +42,7 @@ PID_t speedPID = {
 
 // 位置环输出给位置环作为输出轴目标转速
 PID_t positionPID = {
-    .KP = 2.0f,
+    .KP = 1.0f,
     .KI = 0.0f,
     .KD = 0.0f,
     .outputMax = 120.0f, // 输出转速限幅
@@ -119,7 +119,7 @@ void Motor_SetCommand(const Command *command)
     }
 
     
-    // 判断是否发生改变，如果是定时发送相同信息则可能不改变
+    // 判断命令是否发生改变，如果是定时发送相同信息则不改变
     bool changed = command->mode != motor_command.mode ||
                    command->a != motor_command.a ||
                    command->b != motor_command.b ||
@@ -173,7 +173,7 @@ void MotorTask(void *argument)
             // 速度
             state=0xBA;
         }
-        if(command.mode==0x22||(command.mode == 0x22 && command.action_id == 0x000000000))
+        else
         {
             // 位置
             state=0xAA;
