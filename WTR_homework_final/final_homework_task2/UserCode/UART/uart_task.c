@@ -9,9 +9,15 @@
 #include "motor_task.h"
 #include "CANCommunication.h"
 
-volatile bool host_connected = false;
-volatile uint32_t host_time = 0;
-volatile bool host_stop = false;
+// 与上位机连接
+volatile bool upper_connected = false;
+// 上次收到有效命令的时间
+volatile uint32_t upper_time = 0;
+// 上位机停止请求
+volatile bool upper_stop = false;
+
+// 最近一条有效命令是否为速度模式启动请求
+volatile bool upper_start = false;
 
 // 接收完成
 #define UART_RX_DONE 1
@@ -19,13 +25,13 @@ volatile bool host_stop = false;
 // 串口发生错误
 #define UART_RX_ERROR 2
 
-// 串口任务句柄
+// 任务线程id，供回调函数内设置flag
 static osThreadId_t uart_handle;
 
-// DMA接收缓冲区
+// 接收缓冲区
 static uint8_t rx_buffer[32];
 
-// 本次接收的字节数
+// 本次收到的字节数（防止解析的时候解析到后面的垃圾数据）
 static volatile uint16_t rx_length = 0;
 
 // 启动一次DMA接收，开始接收（来自上位机的数据）
@@ -96,23 +102,18 @@ void UartTask(void *argument)
                 if (frame_ok == true)
                 {
                     // 只有完整有效帧才刷新连接时间
-                    host_time = HAL_GetTick();
+                    upper_time = HAL_GetTick();
 
-                    // 上位机的急停是将最大速度和目标速度都设置为0
+                    // 任务二只用速度模式的A字段区分启动和停止
+                    upper_start = command.mode == 0x00 && command.a > 0;
+
                     if (command.mode == 0x00)
                     {
-                        if (command.a <= 0)
-                        {
-                            host_stop = true;
-                        }
-                        else
-                        {
-                            host_stop = false;
-                        }
+                        upper_stop = command.a <= 0;
                     }
 
                     // 任意合法模式的数据包都能表明通信正常
-                    host_connected = true;
+                    upper_connected = true;
 
                     // 连接正常，开灯
                     Led_Set(true);
@@ -129,11 +130,11 @@ void UartTask(void *argument)
         uint32_t now = HAL_GetTick();
 
         // 没收到数据时，也必须检查连接是否超时
-        if (host_connected == true)
+        if (upper_connected == true)
         {
-            if ((uint32_t)(now - host_time) >= HOST_TIMEOUT_MS)
+            if ((uint32_t)(now - upper_time) >= UPPER_TIMEOUT_MS)
             {
-                host_connected = false;
+                upper_connected = false;
 
                 Led_Set(false);
 
