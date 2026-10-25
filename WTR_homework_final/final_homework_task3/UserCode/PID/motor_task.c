@@ -40,8 +40,8 @@ PID_t speedPID = {
     .integralMax = 1000.0f            // 积分限幅
 };
 
-// 位置环输出作为输出轴目标转速
-PID_t posPID = {
+// 位置环输出给位置环作为输出轴目标转速
+PID_t positionPID = {
     .KP = 2.0f,
     .KI = 0.0f,
     .KD = 0.0f,
@@ -69,11 +69,11 @@ static void speedServo(float ref)
 // ref 目标位置（角度），单位deg
 static void positionServo(float ref, float max_speed)
 {
-    posPID.ref = ref;
-    posPID.fdb = motor_data.position;
-    posPID.outputMax = max_speed;
-    PID_Calc(&posPID);
-    speedServo(posPID.output);
+    positionPID.ref = ref;
+    positionPID.fdb = motor_data.position;
+    positionPID.outputMax = max_speed;
+    PID_Calc(&positionPID);
+    speedServo(positionPID.output);
 }
 
 // ----------------------------------获取指令 调度状态--------------------------------
@@ -111,8 +111,11 @@ void Motor_SetCommand(const Command *command)
 
         // 如果是允许启动状态但是还暂停，切换为运行状态
         else if (first_start || run_state == MOTOR_READY)
+        {
             run_state = MOTOR_RUN;
             first_start = false;
+        }
+
     }
 
     
@@ -180,7 +183,7 @@ void MotorTask(void *argument)
         if (run_state != MOTOR_RUN)
         {
             PID_Reset(&speedPID);
-            PID_Reset(&posPID);
+            PID_Reset(&positionPID);
             CAN_SendCurrent(0);
         }
         else
@@ -189,7 +192,7 @@ void MotorTask(void *argument)
             if (current_id != last_id)
             {
                 PID_Reset(&speedPID);
-                PID_Reset(&posPID);
+                PID_Reset(&positionPID);
                 Action_Start(now);
                 last_id = current_id;
             }
@@ -217,7 +220,7 @@ void MotorTask(void *argument)
                 // A为最大输出轴转速，B为目标角度
                 positionServo((float)command.b, (float)command.a);
 
-                if (fabsf(posPID.ref - motor_data.position) < 2.0f &&
+                if (fabsf(positionPID.ref - motor_data.position) < 2.0f &&
                     fabsf(motor_data.output_speed) < 5.0f)
                     state = 0xBF;
                 break;
