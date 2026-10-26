@@ -1,7 +1,7 @@
 #include "CANCommunication.h"
 #include "can.h"
 
-// 全局变量可供其他任务读取，记录最近一次反馈的数据
+// 全局变量可供其他任务读取，记录最近一次反馈的数据（数据来自motor_task）
 volatile MotorData motor_data = {0};
 
 // 上一次转子的角度，单位deg

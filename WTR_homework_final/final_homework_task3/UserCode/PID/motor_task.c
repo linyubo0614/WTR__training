@@ -76,7 +76,7 @@ static void positionServo(float ref, float max_speed)
     speedServo(positionPID.output);
 }
 
-// ----------------------------------获取指令 调度状态--------------------------------
+// ---------------------------------- 获取指令 调度状态 --------------------------------
 /**
  * 本函数接收来自串口的指令
  * 用于调度状态
@@ -141,7 +141,7 @@ void Motor_SetCommand(const Command *command)
     osKernelRestoreLock(lock_state);
 }
 
-// ---------------------------------根据指令控制电机------------------------------
+// ---------------------------------------根据指令控制电机--------------------------------
 
 void MotorTask(void *argument)
 {
@@ -166,16 +166,17 @@ void MotorTask(void *argument)
         if (!motor_ok || !upper_ok)
             run_state = MOTOR_STOP;
 
+        // 反馈给上位机的运动状态（执行中与到达）
         uint8_t state;
 
         if(command.mode==0x11||(command.mode == 0x22 && command.action_id == 0x11111111))
         {
-            // 速度
+            // 关于速度的，包括预设动作模式的第一个
             state=0xBA;
         }
         else
         {
-            // 位置
+            // 关于位置的，包括预设动作模式的第二个
             state=0xAA;
         }
 
@@ -186,9 +187,11 @@ void MotorTask(void *argument)
             PID_Reset(&positionPID);
             CAN_SendCurrent(0);
         }
+
+        // 如果可以允许，进入状态机，具体执行相应动作
         else
         {
-            // 状态切换，重置
+            // 状态切换，重置PID
             if (current_id != last_id)
             {
                 PID_Reset(&speedPID);

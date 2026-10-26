@@ -44,12 +44,13 @@ static float start_position = 0.0f;
 // 再计算时间
 // 传入的是相对于初始零点的位置和当前速度
 // 以当前位置为0点
+// 利用指针改变PID的ref 
 bool PositionAction(uint32_t now, float position, float speed, float *ref)
 {
     switch (step)
     {
     case 0:
-        // 记录一次起点
+        // 记录最初的位置
         start_position = position;
 
         // 从起点正向转720
@@ -58,7 +59,7 @@ bool PositionAction(uint32_t now, float position, float speed, float *ref)
         break;
 
     case 1:
-        // 前往起点+720°
+        // 前往720°
         *ref = start_position + 720.0f;
 
         if (fabsf(*ref - position) < 2.0f && fabsf(speed) < 5.0f)
@@ -73,13 +74,7 @@ bool PositionAction(uint32_t now, float position, float speed, float *ref)
         // 在起点+720°停留3秒
         *ref = start_position + 720.0f;
 
-        if (fabsf(*ref - position) >= 2.0f || fabsf(speed) >= 5.0f)
-        {
-            // 偏离到位范围，重新等待到位并计时
-            // 回到步骤1，不重新记录起点
-            step = 1;
-        }
-        else if ((uint32_t)(now - wait_time) >= 3000)
+        if ((now - wait_time) >= 3000)
         {
             *ref = start_position + 360.0f;
             step = 3;
@@ -102,11 +97,7 @@ bool PositionAction(uint32_t now, float position, float speed, float *ref)
         // 在起点+360°停留1秒
         *ref = start_position + 360.0f;
 
-        if (fabsf(*ref - position) >= 2.0f || fabsf(speed) >= 5.0f)
-        {
-            step = 3;
-        }
-        else if ((uint32_t)(now - wait_time) >= 1000)
+        if ((uint32_t)(now - wait_time) >= 1000)
         {
             *ref = start_position;
             step = 5;
