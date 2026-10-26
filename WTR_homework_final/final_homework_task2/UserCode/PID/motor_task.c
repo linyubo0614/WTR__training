@@ -17,10 +17,11 @@ typedef enum
     MOTOR_RUN    // 已允许启动
 } MotorState;
 
-// 以下参数都暂定
+// 以下参数都暂定（线下调过了，但感觉效果一般）
+// 这个方波跟随任务只使用了速度环
 // 速度环输出电流指令
 PID_t speedPID = {
-    .KP = 10.0f,
+    .KP = 30.0f,
     .KI = 0.01f,
     .KD = 0.0f,
     .outputMax = 4000.0f, // 输出电流限幅
@@ -104,7 +105,7 @@ void MotorTask(void *argument)
         }
         else
         {
-            // 每次启动，方波从200rpm开始
+            // 方波从200rpm开始
             if (!running)
             {
                 start_time = now;

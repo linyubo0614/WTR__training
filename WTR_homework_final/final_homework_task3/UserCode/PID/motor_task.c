@@ -216,16 +216,19 @@ void MotorTask(void *argument)
                 speedServo((float)command.b);
                 // 允许一定的误差
                 if (fabsf(speedPID.ref - motor_data.output_speed) < 5.0f)
+                {
                     state = 0xAF;
+                }
                 break;
 
             case 0x11:
                 // A为最大输出轴转速，B为目标角度
                 positionServo((float)command.b, (float)command.a);
 
-                if (fabsf(positionPID.ref - motor_data.position) < 2.0f &&
-                    fabsf(motor_data.output_speed) < 5.0f)
+                if (fabsf(positionPID.ref - motor_data.position) < 6.0f && fabsf(motor_data.output_speed) < 5.0f)
+                {
                     state = 0xBF;
+                }
                 break;
 
             case 0x22:

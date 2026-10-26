@@ -85,7 +85,7 @@ bool PositionAction(uint32_t now, float position, float speed, float *ref)
         // 从起点+720°退回到起点+360°
         *ref = start_position + 360.0f;
 
-        if (fabsf(*ref - position) < 2.0f && fabsf(speed) < 5.0f)
+        if (fabsf(*ref - position) < 8.0f && fabsf(speed) < 7.0f)
         {
             // 到位并停稳后开始计时
             wait_time = now;
@@ -108,7 +108,7 @@ bool PositionAction(uint32_t now, float position, float speed, float *ref)
         // 回到本次动作的起点
         *ref = start_position;
 
-        if (fabsf(*ref - position) < 2.0f && fabsf(speed) < 5.0f)
+        if (fabsf(*ref - position) < 5.0f && fabsf(speed) < 5.0f)
         {
             return true;
         }
