@@ -33,20 +33,20 @@ volatile uint8_t motor_state = 0xFF;
 // 以下参数都暂定
 // 速度环输出电流指令
 PID_t speedPID = {
-    .KP = 25.0f,
-    .KI = 0.015f,
-    .KD = 0.0f,
+    .KP = 85.0f,
+    .KI = 2.0f,
+    .KD = 3.0f,
     .outputMax = MOTOR_CURRENT_LIMIT, // 输出电流限幅
     .integralMax = 1000.0f            // 积分限幅
 };
 
-// 位置环输出给位置环作为输出轴目标转速
+// 位置环输出给速度环作为目标转速
 PID_t positionPID = {
     .KP = 1.0f,
     .KI = 0.0f,
     .KD = 0.0f,
-    .outputMax = 120.0f, // 输出转速限幅
-    .integralMax = 20.0f // 积分限幅（外环先不用I）
+    .outputMax = 500.0f,              // 输出转速限幅
+    .integralMax = 20.0f
 };
 
 // ---------------------------------串级PID计算与将信息传入CAN ------------------------------------------

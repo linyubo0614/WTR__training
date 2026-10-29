@@ -21,9 +21,9 @@ typedef enum
 // 这个方波跟随任务只使用了速度环
 // 速度环输出电流指令
 PID_t speedPID = {
-    .KP = 30.0f,
-    .KI = 0.01f,
-    .KD = 0.0f,
+    .KP = 85.0f,
+    .KI = 2.0f,
+    .KD = 2.0f,
     .outputMax = 4000.0f, // 输出电流限幅
     .integralMax = 1000.0f // 积分限幅
 };
