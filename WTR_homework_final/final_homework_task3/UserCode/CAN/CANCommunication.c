@@ -50,11 +50,11 @@ bool CAN_Start(void)
     if (result != HAL_OK)
         return false;
 
-    //激活中断，成功则返回ture
+    // 使能中断，成功则返回ture
     return HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) == HAL_OK;
 }
 
-// -----------------------------在收报回调中获取并且处理数据---------------------------------
+// -----------------------------在收报回调中获取并且处理数据-----------------------------------
 /**
  * 用于获取电调反馈的数据并且处理
  * 存入motor_data结构体
@@ -85,6 +85,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     while (HAL_CAN_GetRxFifoFillLevel(hcan, CAN_RX_FIFO0) > 0)
     {
         HAL_StatusTypeDef result = HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &header, DATA);
+
         if (result != HAL_OK)
             break;
 
@@ -156,8 +157,8 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         last_rotor_angle = rotor_angle;
 
         // 保存原始反馈
-        motor_data.angle = angle;
-        motor_data.speed = speed;
+        // motor_data.angle = angle;
+        // motor_data.speed = speed;
 
         // 把转子转速换算为输出轴转速（比例36：1），有正负（方向）
         motor_data.output_speed = MOTOR_DIRECTION * (float)speed / MOTOR_RATIO;
@@ -191,11 +192,9 @@ bool CAN_SendCurrent(int16_t current)
         current = -MOTOR_CURRENT_LIMIT;
     }
 
-    if (current == 0 && current_pending)
+    if (current == 0 && current_pending == true )
     {
-        // 防止总线恢复时先发出故障前滞留的非零指令
-        HAL_CAN_AbortTxRequest(&hcan1,
-            CAN_TX_MAILBOX0 | CAN_TX_MAILBOX1 | CAN_TX_MAILBOX2);
+        HAL_CAN_AbortTxRequest(&hcan1,CAN_TX_MAILBOX0 | CAN_TX_MAILBOX1 | CAN_TX_MAILBOX2);
         current_pending = false;
     }
 
@@ -222,12 +221,14 @@ bool CAN_SendCurrent(int16_t current)
     data[1] = (uint8_t)current_bits;
 
     // 发送邮箱
-    uint32_t mailbox;
+    uint32_t used_mailbox;
 
     // 将报文放入CAN发送邮箱
-    HAL_StatusTypeDef result = HAL_CAN_AddTxMessage(&hcan1, &header, data, &mailbox);
+    HAL_StatusTypeDef result = HAL_CAN_AddTxMessage(&hcan1, &header, data, &used_mailbox);
     if (result == HAL_OK && current != 0)
+    {
         current_pending = true;
+    }
 
     return result == HAL_OK;
 }

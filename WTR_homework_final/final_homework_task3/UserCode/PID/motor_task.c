@@ -33,8 +33,8 @@ volatile uint8_t motor_state = 0xFF;
 // 以下参数都暂定
 // 速度环输出电流指令
 PID_t speedPID = {
-    .KP = 85.0f,
-    .KI = 2.0f,
+    .KP = 74.0f,
+    .KI = 0.25f,
     .KD = 3.0f,
     .outputMax = MOTOR_CURRENT_LIMIT, // 输出电流限幅
     .integralMax = 1000.0f            // 积分限幅

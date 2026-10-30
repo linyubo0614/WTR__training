@@ -18,10 +18,10 @@
 typedef struct
 {
     // 转子角度，无单位，范围：0-8191，对应0-360°
-    uint16_t angle;
+    // uint16_t angle;
 
     // 转子转速，单位rpm，可以为负数
-    int16_t speed;
+    // int16_t speed;
 
     // 减速后的输出轴转速，单位rpm
     float output_speed;

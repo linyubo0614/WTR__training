@@ -25,7 +25,7 @@ static uint8_t rx_buffer[32];
 static volatile uint16_t rx_length = 0;
 
 
-//--------------------------------------启动DMA接收------------------------------
+// --------------------------------------启动DMA接收------------------------------
 static bool StartReceive(void)
 {
     HAL_StatusTypeDef result = HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rx_buffer, sizeof(rx_buffer));
@@ -38,7 +38,7 @@ static bool StartReceive(void)
     return true;
 }
 
-//---------------------------------------两个中断回调函数---------------------------
+// ---------------------------------------两个中断回调函数---------------------------
 // 只记录长度并通知任务
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
@@ -56,10 +56,11 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
         osThreadFlagsSet(uart_handle, UART_RX_ERROR);
 }
 
-//-----------------------------对上报上位机数据的初步处理---------------------------------
-// 两字节int16，必须限幅不然装不下
-// 之后转化为int16，再发送给上位机
+// -----------------------------对上报上位机数据的初步处理---------------------------------
 /**
+ * 两字节int16，必须限幅不然装不下
+ * 之后转化为int16，再发送给上位机
+ * 
  * 需要说明的是，传输两个字节是受限于协议
  * 如果实际speed或者posision超过范围，上位机只能收到最大/最小值
  * 但是在PID计算的时候没有这个限制，仍然可以利用实际值
