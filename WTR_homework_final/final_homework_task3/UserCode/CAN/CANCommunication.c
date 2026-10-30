@@ -50,7 +50,7 @@ bool CAN_Start(void)
     if (result != HAL_OK)
         return false;
 
-    // 开启通知，若成功，返回true
+    //激活中断，成功则返回ture
     return HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) == HAL_OK;
 }
 
@@ -75,7 +75,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         return;
     }
 
-    // 一个标准数据帧
+    // 一个标准数据帧帧头
     CAN_RxHeaderTypeDef header;
 
     // 数据正文
@@ -163,7 +163,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         motor_data.output_speed = MOTOR_DIRECTION * (float)speed / MOTOR_RATIO;
 
         // 当前转子相对于初始位置的绝对角度
-        float total_angle=total_angle = rounds * 360.0f + rotor_angle - start_angle;
+        float total_angle = rounds * 360.0f + rotor_angle - start_angle;
 
         // 换算输出轴相对初始位置的角度
         motor_data.position = MOTOR_DIRECTION * total_angle / MOTOR_RATIO;

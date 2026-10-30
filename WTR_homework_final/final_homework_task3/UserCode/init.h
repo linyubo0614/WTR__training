@@ -1,6 +1,3 @@
-#ifndef INIT_H
-#define INIT_H
+#pragma once
 
 void Init(void *argument);
-
-#endif
