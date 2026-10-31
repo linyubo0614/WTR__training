@@ -6,9 +6,8 @@
 #include "led.h"
 #include "cmsis_os2.h"
 
-// 设置两个标志，分别标记接收到数据 与 接收数据错误
+// 设置标志，标记接收到数据
 #define UART_RX_DONE 1
-#define UART_RX_ERROR 2
 
 // 与上位机连接
 volatile bool upper_time = false;
@@ -38,7 +37,7 @@ static bool StartReceive(void)
     return true;
 }
 
-// ---------------------------------------两个中断回调函数---------------------------
+// ---------------------------------------串口空闲中断回调函数-------------------------------
 // 只记录长度并通知任务
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
@@ -47,13 +46,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         rx_length = Size;
         osThreadFlagsSet(uart_handle, UART_RX_DONE);
     }
-}
-
-// 只是用来设置flag
-void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance == USART1)
-        osThreadFlagsSet(uart_handle, UART_RX_ERROR);
 }
 
 // -----------------------------对上报上位机数据的初步处理---------------------------------
@@ -97,24 +89,15 @@ void UartTask(void *argument)
     // 清空已放入缓冲区的字节
     UART_Reset();
 
-    // 如果开启了设为ture，可以再次开始设为false
+    // 如果开启了设为ture，false可以再次开始
     bool receiving = StartReceive();
 
     while (1)
     {
-        uint32_t flags = osThreadFlagsWait(UART_RX_DONE | UART_RX_ERROR, osFlagsWaitAny, 20);
-
-        // 错误
-        if (flags == UART_RX_ERROR || flags == 3)
-        {
-            // 中断接收
-            HAL_UART_AbortReceive(&huart1);
-            UART_Reset();
-            receiving = false;
-        }
+        uint32_t flags = osThreadFlagsWait(UART_RX_DONE , osFlagsWaitAny, 20);
 
         // 正常完成
-        else if (flags == UART_RX_DONE)
+        if (flags == UART_RX_DONE)
         {
             receiving = false;
 
