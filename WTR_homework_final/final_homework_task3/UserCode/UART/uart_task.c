@@ -11,7 +11,7 @@
 #define UART_RX_ERROR 2
 
 // 与上位机连接
-volatile bool upper_connected = false;
+volatile bool upper_time = false;
 
 // 上次收到有效命令的时间
 volatile uint32_t upper_time = 0;
@@ -94,7 +94,7 @@ void UartTask(void *argument)
     // 上次发送反馈的时间（第一次用当前时间初始化）
     uint32_t last_send = HAL_GetTick();
 
-    // 清空已有字节
+    // 清空已放入缓冲区的字节
     UART_Reset();
 
     // 如果开启了设为ture，可以再次开始设为false
@@ -107,7 +107,7 @@ void UartTask(void *argument)
         // 错误
         if (flags == UART_RX_ERROR || flags == 3)
         {
-            // 停止接收
+            // 中断接收
             HAL_UART_AbortReceive(&huart1);
             UART_Reset();
             receiving = false;
@@ -137,7 +137,7 @@ void UartTask(void *argument)
     
         uint32_t now = HAL_GetTick();
 
-        // 如果上位机连接，但是超时（设置为1500ms）了，认定为断开
+        // 如果上位机连接，但是超时了，认定为断开
         if (upper_connected && (uint32_t)(now - upper_time) >= UPPER_TIMEOUT_MS)
         {
             upper_connected = false;

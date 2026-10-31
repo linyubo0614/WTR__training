@@ -10,11 +10,12 @@
 // UART_Input，处理数据流（找8字节数据）交由UART_Decode检查并解码
 // 未通过检查的数据逐个向下在检查
 // 目的是识别并且丢弃错误帧和噪音
-// 正在检查的8字节数据帧8字节不一定正确，还需要交给UART_Decode再检查）
+// 正在检查的8字节数据帧8字节不一定正确，还需要交给UART_Decode再检查
+// 这些数据经过拆分变成command，然后传入motor_setcommand，经过处理形成指令放入can
 
 static uint8_t parse_frame[8];
 
-// 当前已积累的字节数（只初始化一次）
+// 当前已积累的字节数
 static uint8_t parse_count = 0;
 
 // 清空
@@ -122,7 +123,8 @@ bool UART_Decode(const uint8_t *data, uint16_t length, Command *command)
         result.action_id = (uint32_t)data[3] | ((uint32_t)data[4] << 8) | ((uint32_t)data[5] << 16) | ((uint32_t)data[6] << 24);
     }
     // 如果不是，分别获得AB
-    else{
+    else
+    {
         result.a = ReadInt16(&data[3]);
         result.b = ReadInt16(&data[5]);
     }
@@ -138,7 +140,7 @@ bool UART_Decode(const uint8_t *data, uint16_t length, Command *command)
         return false;
     }
 
-    // 9. 利用指针返回多个结果
+    // 9. 利用指针和结构体返回多个结果
     *command = result;
 
     return true;

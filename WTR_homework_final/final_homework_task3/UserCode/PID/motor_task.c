@@ -14,7 +14,7 @@ typedef enum
     MOTOR_RUN    // 已允许启动
 } MotorState;
 
-// 上电先保持不允许启动，收到有效命令再进入ready
+// 上电先处于停止状态，首次满足条件时允许直接启动
 static volatile MotorState run_state = MOTOR_STOP;
 
 // 首次启动直接可以接收命令，不用先按急停
@@ -87,6 +87,7 @@ static volatile Command motor_command = {0};
 // 如果切换或者断联后重新恢复连接 需要重置PID，否则不用管
 static volatile uint32_t command_id = 0;
 
+// command由串口任务接收并解码来自上位机的命令
 void Motor_SetCommand(const Command *command)
 {
     int32_t lock_state = osKernelLock();

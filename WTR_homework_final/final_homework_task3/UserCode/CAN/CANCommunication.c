@@ -50,7 +50,7 @@ bool CAN_Start(void)
     if (result != HAL_OK)
         return false;
 
-    // 使能中断，成功则返回ture
+    // 使能接受新数据中断
     return HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) == HAL_OK;
 }
 
@@ -135,9 +135,8 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         }
         else
         {
-            // 稍微算了下，正常反馈+空载转速下，相邻反馈之间达不到半圈
-            //
-
+            // 正常反馈时间间隔+作业要求的最高转速（500）下，相邻反馈之间不超过达不到半圈
+            
             // 计算本次相对上次移动了多少度
             float delta = rotor_angle - last_rotor_angle;
 
@@ -155,10 +154,6 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 
         // 保存本次角度，供下一次比较
         last_rotor_angle = rotor_angle;
-
-        // 保存原始反馈
-        // motor_data.angle = angle;
-        // motor_data.speed = speed;
 
         // 把转子转速换算为输出轴转速（比例36：1），有正负（方向）
         motor_data.output_speed = MOTOR_DIRECTION * (float)speed / MOTOR_RATIO;
