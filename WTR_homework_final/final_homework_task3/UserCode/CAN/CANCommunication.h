@@ -13,7 +13,7 @@
 // 作业规定的C610电流指令上限（对应4A）
 #define MOTOR_CURRENT_LIMIT 4000
 
-// 电调反馈的电机数据（含原始反馈和输出轴换算结果）
+// 电调反馈的电机数据
 // 注：发送频率1KHz
 typedef struct
 {
@@ -26,7 +26,7 @@ typedef struct
     // 最近一次收到有效反馈的时间（单位是ms）
     uint32_t time_ms;
 
-    // 是否收到过有效反馈
+    // 是否收到过有效反馈（只有第一次是false）
     bool received;
 
 } MotorData;

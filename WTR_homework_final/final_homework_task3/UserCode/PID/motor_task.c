@@ -83,8 +83,6 @@ static void positionServo(float ref, float max_speed)
  */
 // 收到的指令，来自串口（在UartTask中调用）
 static volatile Command motor_command = {0};
-// 指令id，每次接收到命令后用于判断是否切换到新的运行状态
-// 如果切换或者断联后重新恢复连接 需要重置PID，否则不用管
 static volatile uint32_t command_id = 0;
 
 // command由串口任务接收并解码来自上位机的命令
@@ -92,14 +90,14 @@ void Motor_SetCommand(const Command *command)
 {
     int32_t lock_state = osKernelLock();
 
-    // 上次收到CAN反馈的时间
     uint32_t feedback_time = motor_data.time_ms;
     uint32_t now = HAL_GetTick();
 
-    // 是否收到过电调反馈，并且最近100 ms内仍有反馈（用于判断电调和下位机是否正常连通）
+    MotorState last_state = run_state;
+
     bool motor_ok = motor_data.received && (uint32_t)(now - feedback_time) < 100;
 
-    // 必须上下位机连接正常，下位机与电调连接顺畅才判断，否则判断为无启动条件
+    // 必须上下位机连接正常，下位机与电调连接正常
     if (!motor_ok || !upper_connected || (uint32_t)(now - upper_time) >= UPPER_TIMEOUT_MS)
         run_state = MOTOR_STOP;
 
@@ -126,18 +124,15 @@ void Motor_SetCommand(const Command *command)
                    command->b != motor_command.b ||
                    command->action_id != motor_command.action_id;
 
-    MotorState last_state = run_state;
-
     // 重复定时发送相同的指令不改变编号，不会重置PID或重启预设动作
     // 停止后重新启动，即使目标相同，也需要重新开始动作
     if (changed || (last_state != MOTOR_RUN && run_state == MOTOR_RUN))
         command_id++;
 
-    // 保存最新一次命令
+    // 保存（复制）最新一次命令
     motor_command = *command;
     upper_time = now;
     upper_connected = true;
-
 
     osKernelRestoreLock(lock_state);
 }
@@ -154,14 +149,14 @@ void MotorTask(void *argument)
     {
         Command command = motor_command;
         uint32_t current_id = command_id;
-        uint32_t feedback_time = motor_data.time_ms;
-        uint32_t receive_time = upper_time;
+        uint32_t feedback_motor_time = motor_data.time_ms;
+        uint32_t receive_command_time = upper_time;
         uint32_t now = HAL_GetTick();
 
         // 下位机与电调连接是否正常
-        bool motor_ok = motor_data.received && (uint32_t)(now - feedback_time) < 100;
+        bool motor_ok = motor_data.received && (uint32_t)(now - feedback_motor_time) < 100;
         // 上位机与下位机连接是否正常
-        bool upper_ok = upper_connected && (uint32_t)(now - receive_time) < UPPER_TIMEOUT_MS;
+        bool upper_ok = upper_connected && (uint32_t)(now - receive_command_time) < UPPER_TIMEOUT_MS;
 
         // 其中一个出问题就设置为不允许启动状态
         if (!motor_ok || !upper_ok)
@@ -172,12 +167,12 @@ void MotorTask(void *argument)
 
         if(command.mode==0x11||(command.mode == 0x22 && command.action_id == 0x11111111))
         {
-            // 关于速度的，包括预设动作模式的第一个
+            // 0xBA 正在前往目标位置
             state=0xBA;
         }
         else
         {
-            // 关于位置的，包括预设动作模式的第二个
+            // 0xAA 正在前往目标速度
             state=0xAA;
         }
 
@@ -188,7 +183,6 @@ void MotorTask(void *argument)
             PID_Reset(&positionPID);
             CAN_SendCurrent(0);
         }
-
         // 如果可以允许，进入状态机，具体执行相应动作
         else
         {

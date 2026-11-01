@@ -30,10 +30,8 @@ bool UART_Input(uint8_t byte, Command *command)
     // 保存新字节
     parse_frame[parse_count] = byte;
 
-    // 指针后移
     parse_count++;
 
-    // 不足8字节，继续等
     if (parse_count < sizeof(parse_frame))
     {
         return false;
@@ -41,11 +39,9 @@ bool UART_Input(uint8_t byte, Command *command)
 
     // 积累够8字节，检查并且解码
     bool frame_ok = UART_Decode(parse_frame, sizeof(parse_frame), command);
-    if (frame_ok)
-    {
-        // 已处理一帧，准备接收下一帧
-        parse_count = 0;
 
+    if (frame_ok){
+        parse_count = 0;
         return true;
     }
 
@@ -66,7 +62,6 @@ static int16_t ReadInt16(const uint8_t *data)
 
     uint16_t value = (uint16_t)data[0] | ((uint16_t)data[1] << 8);
 
-    // 负数情况
     if (value >= 0x8000)
     {
         return (int16_t)((int32_t)value - 65536);
@@ -135,12 +130,8 @@ bool UART_Decode(const uint8_t *data, uint16_t length, Command *command)
         if (result.action_id != 0x00000000 && result.action_id != 0x11111111)
             return false;
     }
-    else if (result.a < 0 || result.b < 0)
-    {
-        return false;
-    }
-
-    // 9. 利用指针和结构体返回多个结果
+    
+    // 9. 返回结果
     *command = result;
 
     return true;

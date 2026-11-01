@@ -41,7 +41,7 @@ static float start_position = 0.0f;
 
 // 位置：先到0°，再到720°停3秒，360°停1秒，最后回0°
 // 因为从一个位置到另一个位置的时间不固定
-// 故需要判断是否到位了（判定范围需要调）
+// 故需要判断是否到位了
 // 再开始等待指定时间
 // 传入的是相对于初始零点的位置和当前速度
 // 以当前位置为0点
@@ -60,12 +60,10 @@ bool PositionAction(uint32_t now, float position, float speed, float *ref)
         break;
 
     case 1:
-        // 前往720°
         *ref = start_position + 720.0f;
 
         if (fabsf(*ref - position) < 2.0f && fabsf(speed) < 5.0f)
         {
-            // 到位并停稳后开始计时
             wait_time = now;
             step = 2;
         }
@@ -88,7 +86,6 @@ bool PositionAction(uint32_t now, float position, float speed, float *ref)
 
         if (fabsf(*ref - position) < 8.0f && fabsf(speed) < 7.0f)
         {
-            // 到位并停稳后开始计时
             wait_time = now;
             step = 4;
         }

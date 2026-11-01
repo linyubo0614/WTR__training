@@ -89,25 +89,22 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         if (result != HAL_OK)
             break;
 
-        // 只处理ID为1的电调发来的标准（IDE）数据（RTR）帧
+        // 只处理ID为1的电调发来的标准数据帧
         if (header.IDE != CAN_ID_STD || header.RTR != CAN_RTR_DATA ||
-            // 接收反馈的报文ID，定义电调ID是一号，所以是0x201
             header.StdId != 0x201 ||
-            // 数据长度是8
             header.DLC != 8)
         {
-            // 不满足以上条件的跳过本帧
             continue;
         }
 
-        // 大端序拼接转子角度
+        // 大端序
         uint16_t angle = ((uint16_t)DATA[0] << 8) | (uint16_t)DATA[1];
 
         // 不能超过手册限定数
         if (angle > 8191)
             continue;
 
-        // 大端序拼接转速编码（先拼起来，暂不考虑正负）
+        // 大端序拼接转速编码（暂不考虑正负）
         uint16_t speed_temporary = ((uint16_t)DATA[2] << 8) | (uint16_t)DATA[3];
 
         // 将转速的16位编码还原成有符号数
@@ -155,15 +152,14 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         // 保存本次角度，供下一次比较
         last_rotor_angle = rotor_angle;
 
-        // 把转子转速换算为输出轴转速（比例36：1），有正负（方向）
-        motor_data.output_speed = MOTOR_DIRECTION * (float)speed / MOTOR_RATIO;
-
         // 当前转子相对于初始位置的绝对角度
         float total_angle = rounds * 360.0f + rotor_angle - start_angle;
 
         // 换算输出轴相对初始位置的角度
         motor_data.position = MOTOR_DIRECTION * total_angle / MOTOR_RATIO;
 
+        // 把转子转速换算为输出轴转速（比例36：1），有正负（方向）
+        motor_data.output_speed = MOTOR_DIRECTION * (float)speed / MOTOR_RATIO;
         // 更新接收状态
         motor_data.time_ms = HAL_GetTick();
         motor_data.received = true;

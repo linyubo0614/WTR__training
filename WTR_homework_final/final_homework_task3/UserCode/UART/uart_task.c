@@ -10,7 +10,7 @@
 #define UART_RX_DONE 1
 
 // 与上位机连接
-volatile bool upper_time = false;
+volatile bool upper_connected = false;
 
 // 上次收到有效命令的时间
 volatile uint32_t upper_time = 0;
@@ -20,7 +20,7 @@ static osThreadId_t uart_handle;
 
 // 接收缓冲区
 static uint8_t rx_buffer[32];
-// 本次收到的字节数（防止解析的时候解析到后面的垃圾数据）
+
 static volatile uint16_t rx_length = 0;
 
 
@@ -54,7 +54,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
  * 之后转化为int16，再发送给上位机
  * 
  * 需要说明的是，传输两个字节是受限于协议
- * 如果实际speed或者posision超过范围，上位机只能收到最大/最小值
+ * 如果实际posision超过范围，上位机只能收到最大/最小值
  * 但是在PID计算的时候没有这个限制，仍然可以利用实际值
  * 所以影响不大
  */
@@ -77,9 +77,6 @@ void UartTask(void *argument)
 {
     (void)argument;
 
-    // 获取当前线程id
-    uart_handle = osThreadGetId();
-
     // 初始化命令结构体
     Command command = {0};
 
@@ -89,7 +86,10 @@ void UartTask(void *argument)
     // 清空已放入缓冲区的字节
     UART_Reset();
 
-    // 如果开启了设为ture，false可以再次开始
+    // 获取当前线程id
+    uart_handle = osThreadGetId();
+
+    // true:正在接受 false:不在接收
     bool receiving = StartReceive();
 
     while (1)
@@ -107,8 +107,8 @@ void UartTask(void *argument)
                 bool frame_ok = UART_Input(rx_buffer[i], &command);
                 if (frame_ok)
                 {
-                    Motor_SetCommand(&command);
                     Led_Set(true);
+                    Motor_SetCommand(&command);
                 }
             }
         }
