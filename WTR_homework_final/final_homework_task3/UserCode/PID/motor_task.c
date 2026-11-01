@@ -21,7 +21,7 @@ static volatile MotorState run_state = MOTOR_STOP;
 static bool first_start = true;
 
 /**
- * motor_state 是协议规定的反馈状态
+ * motor_state 是作业规定的反馈状态
  * 0xAA 速度模式 正在前往目标速度
  * 0xAF 速度模式 到达目标速度
  * 0xBA 位置控制 正在前往目标位置
@@ -125,7 +125,7 @@ void Motor_SetCommand(const Command *command)
                    command->action_id != motor_command.action_id;
 
     // 重复定时发送相同的指令不改变编号，不会重置PID或重启预设动作
-    // 停止后重新启动，即使目标相同，也需要重新开始动作
+    // 停止后重新启动，即使目标相同，也需要重置
     if (changed || (last_state != MOTOR_RUN && run_state == MOTOR_RUN))
         command_id++;
 
@@ -160,6 +160,7 @@ void MotorTask(void *argument)
 
         // 下位机与电调连接是否正常
         bool motor_ok = motor_data.received && (uint32_t)(now - feedback_motor_time) < 100;
+
         // 上位机与下位机连接是否正常
         bool upper_ok = upper_connected && (uint32_t)(now - receive_command_time) < UPPER_TIMEOUT_MS;
 
