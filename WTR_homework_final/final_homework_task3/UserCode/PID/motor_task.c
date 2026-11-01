@@ -244,7 +244,7 @@ void MotorTask(void *argument)
                     if (finished && fabsf(motor_data.output_speed) < 5.0f)
                         state = 0xAF;
                 }
-                // 预设动作2（可以用else是因为Decode里面已经丢弃其他错误指令了）
+                // 预设动作2
                 else
                 {
                     finished = PositionAction(now, motor_data.position,motor_data.output_speed, &ref);

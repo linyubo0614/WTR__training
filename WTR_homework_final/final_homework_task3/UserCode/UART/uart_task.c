@@ -20,9 +20,7 @@ static osThreadId_t uart_handle;
 
 // 接收缓冲区
 static uint8_t rx_buffer[32];
-
 static volatile uint16_t rx_length = 0;
-
 
 // --------------------------------------启动DMA接收------------------------------
 static bool StartReceive(void)
