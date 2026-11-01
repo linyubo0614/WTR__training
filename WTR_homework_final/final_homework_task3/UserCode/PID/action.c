@@ -30,9 +30,8 @@ bool SpeedAction(uint32_t now, float *ref)
     else if (pased_time < 8000)
         *ref = 150.0f;
     else
-        *ref = 0.0f;
+        *ref = 0.0f;   // 之后保持零转速
 
-    // 之后保持零转速
     return pased_time >= 9000;
 }
 

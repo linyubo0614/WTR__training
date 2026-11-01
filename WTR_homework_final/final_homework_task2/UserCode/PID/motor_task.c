@@ -123,7 +123,6 @@ void MotorTask(void *argument)
                 speedServo(0.0f);
             }
 
-            // 判断实际速度是否接近当前目标速度
             if (fabsf(speedPID.ref - motor_data.output_speed) < 5.0f)
             {
                 // 速度模式，已经到达目标

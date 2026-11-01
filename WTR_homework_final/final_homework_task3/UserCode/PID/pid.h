@@ -29,8 +29,8 @@ typedef struct
     // 输出限幅
     // 最终输出的最大绝对值
     float outputMax;
-
-    // 积分项输出的最大绝对值
+    
+    // 积分限幅
     float integralMax;
 
 } PID_t;

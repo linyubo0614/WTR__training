@@ -114,7 +114,6 @@ void Motor_SetCommand(const Command *command)
             run_state = MOTOR_RUN;
             first_start = false;
         }
-
     }
 
     
@@ -168,7 +167,7 @@ void MotorTask(void *argument)
         if (!motor_ok || !upper_ok)
             run_state = MOTOR_STOP;
 
-        // 反馈给上位机的运动状态（执行中与到达）
+        // 反馈给上位机的运动状态
         uint8_t state;
 
         if(command.mode==0x11||(command.mode == 0x22 && command.action_id == 0x11111111))
@@ -190,9 +189,10 @@ void MotorTask(void *argument)
             CAN_SendCurrent(0);
         }
         // 如果可以允许，进入状态机，具体执行相应动作
+
         else
         {
-            // 若状态切换，重置PID
+            // 若命令切换，重置PID状态
             if (current_id != last_id)
             {
                 PID_Reset(&speedPID);
