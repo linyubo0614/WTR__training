@@ -147,9 +147,14 @@ void MotorTask(void *argument)
 
     while (1)
     {
+        int32_t lock_state = osKernelLock();
+
         Command command = motor_command;
         uint32_t current_id = command_id;
         uint32_t feedback_motor_time = motor_data.time_ms;
+        
+        osKernelRestoreLock(lock_state);
+
         uint32_t receive_command_time = upper_time;
         uint32_t now = HAL_GetTick();
 
