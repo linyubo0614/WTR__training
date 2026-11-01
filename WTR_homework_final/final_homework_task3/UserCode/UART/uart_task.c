@@ -101,7 +101,7 @@ void UartTask(void *argument)
 
             for (uint16_t i = 0; i < rx_length; i++)
             {
-                // 一个个字节放入数据流解析
+                // 一个一个字节解析
                 bool frame_ok = UART_Input(rx_buffer[i], &command);
                 if (frame_ok)
                 {
@@ -111,7 +111,6 @@ void UartTask(void *argument)
             }
         }
 
-        // 处理后如果可以开启，就尝试开启DMA
         // 同时如果开启失败就返回false，从而再次开启，实现自动重连
         if (receiving==false)
             receiving = StartReceive();

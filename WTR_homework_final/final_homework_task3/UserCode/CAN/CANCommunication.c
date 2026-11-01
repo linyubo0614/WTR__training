@@ -152,7 +152,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         // 保存本次角度，供下一次比较
         last_rotor_angle = rotor_angle;
 
-        // 当前转子相对于初始位置的绝对角度
+        // 当前转子相对于初始位置的角度
         float total_angle = rounds * 360.0f + rotor_angle - start_angle;
 
         // 换算输出轴相对初始位置的角度

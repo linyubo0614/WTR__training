@@ -9,7 +9,7 @@ void Init(void *argument)
 {
     (void)argument;
 
-    // 还没连接先熄灭LED
+    // 还没连接，熄灭LED
     Led_Set(false);
 
     // 开启CAN1
