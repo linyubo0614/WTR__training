@@ -131,7 +131,7 @@ void MotorTask(void *argument)
             }
             else
             {
-                // 速度模式，正在接近目标
+                // 速度模式，正在前往目标
                 motor_state = 0xAA;
             }
         }

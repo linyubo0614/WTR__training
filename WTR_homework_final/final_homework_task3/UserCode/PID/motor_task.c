@@ -152,7 +152,7 @@ void MotorTask(void *argument)
         Command command = motor_command;
         uint32_t current_id = command_id;
         uint32_t feedback_motor_time = motor_data.time_ms;
-        
+
         osKernelRestoreLock(lock_state);
 
         uint32_t receive_command_time = upper_time;
@@ -191,7 +191,7 @@ void MotorTask(void *argument)
         // 如果可以允许，进入状态机，具体执行相应动作
         else
         {
-            // 状态切换，重置PID
+            // 若状态切换，重置PID
             if (current_id != last_id)
             {
                 PID_Reset(&speedPID);
